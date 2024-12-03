@@ -19,8 +19,9 @@
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "lib": ["es2020", "dom"]
+    "lib": ["es2020", "dom"],
+    "typeRoots": ["./types", "./node_modules/@types"]
   },
-  "files": ["src/confetti.ts"],
+  "files": ["src/confetti.ts", "types/index.d.ts"],
   "exclude": ["node_modules", "dist", "**/*.spec.ts"]
 }

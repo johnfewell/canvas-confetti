@@ -1,19 +1,20 @@
 {
   "name": "@fewell/canvas-confetti-ts",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "A TypeScript-first fork of canvas-confetti with modern ES module support",
   "main": "./dist/bundles/canvas-confetti-ts.umd.js",
   "module": "./dist/fesm2020/canvas-confetti-ts.mjs",
   "es2020": "./dist/fesm2020/canvas-confetti-ts.mjs",
   "esm2020": "./dist/esm2020/canvas-confetti-ts.mjs",
   "fesm2020": "./dist/fesm2020/canvas-confetti-ts.mjs",
-  "typings": "./dist/types/confetti.d.ts",
+  "types": "./types/index.d.ts",
+  "typings": "./types/index.d.ts",
   "exports": {
     "./package.json": {
       "default": "./package.json"
     },
     ".": {
-      "types": "./dist/types/confetti.d.ts",
+      "types": "./types/index.d.ts",
       "esm2020": "./dist/esm2020/canvas-confetti-ts.mjs",
       "es2020": "./dist/fesm2020/canvas-confetti-ts.mjs",
       "es2015": "./dist/fesm2015/canvas-confetti-ts.mjs",

@@ -240,7 +240,7 @@ function drawParticle(particle: Particle) {
       Math.PI * 2
     );
   } else if (particle.shape === "star") {
-    const rot = (Math.PI / 2) * 3;
+    let rotation = (Math.PI / 2) * 3;
     const innerRadius = 4 * particle.scalar;
     const outerRadius = 8 * particle.scalar;
     let x = particle.x;
@@ -249,15 +249,15 @@ function drawParticle(particle: Particle) {
     const step = Math.PI / spikes;
 
     while (spikes--) {
-      x = particle.x + Math.cos(rot) * outerRadius;
-      y = particle.y + Math.sin(rot) * outerRadius;
+      x = particle.x + Math.cos(rotation) * outerRadius;
+      y = particle.y + Math.sin(rotation) * outerRadius;
       ctx.lineTo(x, y);
-      rot += step;
+      rotation += step;
 
-      x = particle.x + Math.cos(rot) * innerRadius;
-      y = particle.y + Math.sin(rot) * innerRadius;
+      x = particle.x + Math.cos(rotation) * innerRadius;
+      y = particle.y + Math.sin(rotation) * innerRadius;
       ctx.lineTo(x, y);
-      rot += step;
+      rotation += step;
     }
   } else {
     // square

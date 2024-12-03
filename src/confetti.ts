@@ -231,6 +231,19 @@ function animate() {
   }
 }
 
+function reset() {
+  if (animationFrame) {
+    cancelAnimationFrame(animationFrame);
+    animationFrame = null;
+  }
+  if (canvas) {
+    ctx = null;
+    document.body.removeChild(canvas);
+    canvas = null;
+  }
+  particles = [];
+}
+
 function confetti(options?: Options): Promise<undefined> | null {
   if (typeof window === "undefined") return null;
 
@@ -254,6 +267,16 @@ function confetti(options?: Options): Promise<undefined> | null {
     if (!ctx) return null;
   }
 
+  // Convert origin coordinates
+  if (mergedOptions.origin) {
+    mergedOptions.x = mergedOptions.origin.x || 0.5;
+    mergedOptions.y = mergedOptions.origin.y || 0.5;
+  }
+
+  // Convert relative coordinates to absolute
+  mergedOptions.x = mergedOptions.x * window.innerWidth;
+  mergedOptions.y = mergedOptions.y * window.innerHeight;
+
   const newParticles = Array.from({ length: mergedOptions.particleCount }, () =>
     createParticle(mergedOptions)
   );
@@ -267,18 +290,8 @@ function confetti(options?: Options): Promise<undefined> | null {
   return Promise.resolve(undefined);
 }
 
-export const reset: Reset = () => {
-  if (animationFrame) {
-    cancelAnimationFrame(animationFrame);
-    animationFrame = null;
-  }
-  if (canvas) {
-    document.body.removeChild(canvas);
-    canvas = null;
-    ctx = null;
-  }
-  particles = [];
-};
+// Add reset function to confetti
+confetti.reset = reset;
 
 export function shapeFromPath({
   path,
@@ -341,127 +354,6 @@ export function shapeFromText({
   }
 
   return "square";
-}
-
-export function create(
-  canvas?: HTMLCanvasElement,
-  globalOptions: GlobalOptions = {}
-): CreateTypes {
-  let currentCanvas: HTMLCanvasElement | undefined = canvas;
-  let currentCtx: CanvasRenderingContext2D | null = null;
-  let particleCanvas: HTMLCanvasElement | null = null;
-  let particleCtx: CanvasRenderingContext2D | null = null;
-  let animationFrame: number | null = null;
-  let particles: Particle[] = [];
-  let worker: Worker | null = null;
-
-  const { resize = false, useWorker = false } = globalOptions;
-
-  function setCanvasSize() {
-    if (!currentCanvas || !resize) return;
-    currentCanvas.width = window.innerWidth;
-    currentCanvas.height = window.innerHeight;
-  }
-
-  function initCanvas() {
-    if (!currentCanvas) {
-      currentCanvas = document.createElement("canvas");
-      currentCanvas.style.position = "fixed";
-      currentCanvas.style.top = "0px";
-      currentCanvas.style.left = "0px";
-      currentCanvas.style.pointerEvents = "none";
-      currentCanvas.style.zIndex = "999999";
-      document.body.appendChild(currentCanvas);
-    }
-
-    if (!currentCtx) {
-      currentCtx = currentCanvas.getContext("2d");
-    }
-
-    setCanvasSize();
-
-    if (resize) {
-      window.addEventListener("resize", setCanvasSize);
-    }
-
-    return currentCtx;
-  }
-
-  function createParticles(options: Required<Options>): Particle[] {
-    return Array.from({ length: options.particleCount }, () =>
-      createParticle(options)
-    );
-  }
-
-  function animate() {
-    if (!currentCtx || !currentCanvas) return;
-
-    currentCtx.clearRect(0, 0, currentCanvas.width, currentCanvas.height);
-    particles = particles.filter((particle) => {
-      if (updateParticle(particle)) {
-        drawParticle(particle);
-        return true;
-      }
-      return false;
-    });
-
-    if (particles.length) {
-      animationFrame = requestAnimationFrame(animate);
-    }
-  }
-
-  const instance = (options?: Options): Promise<null> | null => {
-    if (
-      globalOptions.disableForReducedMotion &&
-      window.matchMedia("(prefers-reduced-motion)").matches
-    ) {
-      return Promise.resolve(null);
-    }
-
-    const mergedOptions: Required<Options> = {
-      ...defaults,
-      ...options,
-    };
-
-    if (!currentCtx && !initCanvas()) {
-      return null;
-    }
-
-    const newParticles = createParticles(mergedOptions);
-    particles.push(...newParticles);
-
-    if (!animationFrame) {
-      animationFrame = requestAnimationFrame(animate);
-    }
-
-    return Promise.resolve(null);
-  };
-
-  instance.reset = () => {
-    if (animationFrame) {
-      cancelAnimationFrame(animationFrame);
-      animationFrame = null;
-    }
-
-    if (worker) {
-      worker.terminate();
-      worker = null;
-    }
-
-    if (currentCanvas && !canvas) {
-      document.body.removeChild(currentCanvas);
-    }
-
-    if (resize) {
-      window.removeEventListener("resize", setCanvasSize);
-    }
-
-    particles = [];
-    currentCanvas = canvas;
-    currentCtx = null;
-  };
-
-  return instance;
 }
 
 export default confetti;

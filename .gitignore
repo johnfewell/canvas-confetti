@@ -41,3 +41,25 @@ coverage/
 shots/
 dist/
 temp/
+
+# Build output
+dist/
+temp/
+
+# Dependencies
+node_modules/
+
+# TypeScript
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db

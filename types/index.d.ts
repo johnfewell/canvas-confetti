@@ -53,8 +53,11 @@ declare module "@fewell/canvas-confetti-ts" {
   const confetti: CreateTypes;
   export default confetti;
 
-  export function shapeFromText(
-    text: string,
-    options?: { size?: number }
-  ): Shape;
+  export interface ShapeFromTextOptions {
+    text: string;
+    scalar?: number;
+    size?: number;
+  }
+
+  export function shapeFromText(options: ShapeFromTextOptions): Shape;
 }

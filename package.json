@@ -7,14 +7,14 @@
   "es2020": "./dist/fesm2020/canvas-confetti-ts.mjs",
   "esm2020": "./dist/esm2020/canvas-confetti-ts.mjs",
   "fesm2020": "./dist/fesm2020/canvas-confetti-ts.mjs",
-  "types": "./types/index.d.ts",
-  "typings": "./types/index.d.ts",
+  "types": "./dist/confetti.d.ts",
+  "typings": "./dist/confetti.d.ts",
   "exports": {
     "./package.json": {
       "default": "./package.json"
     },
     ".": {
-      "types": "./types/index.d.ts",
+      "types": "./dist/confetti.d.ts",
       "esm2020": "./dist/esm2020/canvas-confetti-ts.mjs",
       "es2020": "./dist/fesm2020/canvas-confetti-ts.mjs",
       "es2015": "./dist/fesm2015/canvas-confetti-ts.mjs",

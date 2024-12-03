@@ -103,19 +103,28 @@ const defaults: Required<Options> = {
 };
 
 interface Particle {
+  x: number;
+  y: number;
+  wobble: number;
+  wobbleSpeed: number;
+  velocity: number;
+  angle2D: number;
+  tiltAngle: number;
   color: string;
   shape: Shape;
   tick: number;
-  x: number;
-  y: number;
-  velocity: number;
-  angle: number;
-  wobble: number;
-  wobbleSpeed: number;
+  totalTicks: number;
   decay: number;
-  gravity: number;
   drift: number;
+  random: number;
+  tiltSin: number;
+  tiltCos: number;
+  wobbleX: number;
+  wobbleY: number;
+  gravity: number;
+  ovalScalar: number;
   scalar: number;
+  flat?: boolean;
 }
 
 let canvas: HTMLCanvasElement | null = null;
@@ -147,69 +156,130 @@ function randomInRange(min: number, max: number): number {
 }
 
 function createParticle(options: Required<Options>): Particle {
-  const color =
-    options.colors[Math.floor(Math.random() * options.colors.length)];
-  const shape =
-    options.shapes[Math.floor(Math.random() * options.shapes.length)];
+  const radAngle = options.angle * (Math.PI / 180);
+  const radSpread = options.spread * (Math.PI / 180);
 
   return {
-    color,
-    shape,
-    tick: 0,
     x: options.x,
     y: options.y,
-    velocity: options.startVelocity * 0.5,
-    angle: options.angle + randomInRange(-options.spread, options.spread),
     wobble: Math.random() * 10,
-    wobbleSpeed: 0.1 + Math.random() * 0.1,
+    wobbleSpeed: Math.min(0.11, Math.random() * 0.1 + 0.05),
+    velocity:
+      options.startVelocity * 0.5 + Math.random() * options.startVelocity,
+    angle2D: -radAngle + (0.5 * radSpread - Math.random() * radSpread),
+    tiltAngle: (Math.random() * (0.75 - 0.25) + 0.25) * Math.PI,
+    color: options.colors[Math.floor(Math.random() * options.colors.length)],
+    shape: options.shapes[Math.floor(Math.random() * options.shapes.length)],
+    tick: 0,
+    totalTicks: options.ticks,
     decay: options.decay,
-    gravity: options.gravity,
     drift: options.drift,
+    random: Math.random() + 2,
+    tiltSin: 0,
+    tiltCos: 0,
+    wobbleX: 0,
+    wobbleY: 0,
+    gravity: options.gravity * 3,
+    ovalScalar: 0.6,
     scalar: options.scalar,
   };
 }
 
 function updateParticle(particle: Particle): boolean {
-  particle.tick += 1;
-  particle.x += Math.cos(particle.angle) * particle.velocity + particle.drift;
-  particle.y += Math.sin(particle.angle) * particle.velocity + particle.gravity;
+  particle.x += Math.cos(particle.angle2D) * particle.velocity + particle.drift;
+  particle.y +=
+    Math.sin(particle.angle2D) * particle.velocity + particle.gravity;
   particle.velocity *= particle.decay;
-  particle.wobble += particle.wobbleSpeed;
 
-  return particle.tick < 200 && particle.y < window.innerHeight;
+  if (particle.flat) {
+    particle.wobble = 0;
+    particle.wobbleX = particle.x + 10 * particle.scalar;
+    particle.wobbleY = particle.y + 10 * particle.scalar;
+    particle.tiltSin = 0;
+    particle.tiltCos = 0;
+    particle.random = 1;
+  } else {
+    particle.wobble += particle.wobbleSpeed;
+    particle.wobbleX =
+      particle.x + 10 * particle.scalar * Math.cos(particle.wobble);
+    particle.wobbleY =
+      particle.y + 10 * particle.scalar * Math.sin(particle.wobble);
+    particle.tiltAngle += 0.1;
+    particle.tiltSin = Math.sin(particle.tiltAngle);
+    particle.tiltCos = Math.cos(particle.tiltAngle);
+    particle.random = Math.random() + 2;
+  }
+
+  return (
+    particle.tick++ < particle.totalTicks && particle.y < window.innerHeight
+  );
 }
 
 function drawParticle(particle: Particle) {
   if (!ctx) return;
 
-  const { x, y, wobble, color, shape, scalar } = particle;
-  const rotation = wobble + Math.PI / 2;
-  const size = 5 * scalar;
+  const progress = particle.tick / particle.totalTicks;
+  const x1 = particle.x + particle.random * particle.tiltCos;
+  const y1 = particle.y + particle.random * particle.tiltSin;
+  const x2 = particle.wobbleX + particle.random * particle.tiltCos;
+  const y2 = particle.wobbleY + particle.random * particle.tiltSin;
 
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(rotation);
-
-  ctx.fillStyle = color;
+  ctx.fillStyle = `rgba(${hexToRgb(particle.color).join(",")},${1 - progress})`;
   ctx.beginPath();
 
-  if (shape === "circle") {
-    ctx.arc(0, 0, size, 0, Math.PI * 2);
-  } else if (shape === "square") {
-    ctx.rect(-size, -size, size * 2, size * 2);
-  } else if (shape === "star") {
-    for (let i = 0; i < 5; i++) {
-      const angle = (i * 4 * Math.PI) / 5;
-      const x1 = Math.cos(angle) * size;
-      const y1 = Math.sin(angle) * size;
-      if (i === 0) ctx.moveTo(x1, y1);
-      else ctx.lineTo(x1, y1);
+  if (particle.shape === "circle") {
+    const radiusX = Math.abs(x2 - x1) * particle.ovalScalar;
+    const radiusY = Math.abs(y2 - y1) * particle.ovalScalar;
+    ctx.ellipse(
+      particle.x,
+      particle.y,
+      radiusX,
+      radiusY,
+      (Math.PI / 10) * particle.wobble,
+      0,
+      Math.PI * 2
+    );
+  } else if (particle.shape === "star") {
+    const rot = (Math.PI / 2) * 3;
+    const innerRadius = 4 * particle.scalar;
+    const outerRadius = 8 * particle.scalar;
+    let x = particle.x;
+    let y = particle.y;
+    let spikes = 5;
+    const step = Math.PI / spikes;
+
+    while (spikes--) {
+      x = particle.x + Math.cos(rot) * outerRadius;
+      y = particle.y + Math.sin(rot) * outerRadius;
+      ctx.lineTo(x, y);
+      rot += step;
+
+      x = particle.x + Math.cos(rot) * innerRadius;
+      y = particle.y + Math.sin(rot) * innerRadius;
+      ctx.lineTo(x, y);
+      rot += step;
     }
-    ctx.closePath();
+  } else {
+    // square
+    ctx.moveTo(Math.floor(particle.x), Math.floor(particle.y));
+    ctx.lineTo(Math.floor(particle.wobbleX), Math.floor(y1));
+    ctx.lineTo(Math.floor(x2), Math.floor(y2));
+    ctx.lineTo(Math.floor(x1), Math.floor(particle.wobbleY));
   }
 
+  ctx.closePath();
   ctx.fill();
-  ctx.restore();
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result
+    ? [
+        parseInt(result[1], 16),
+        parseInt(result[2], 16),
+        parseInt(result[3], 16),
+      ]
+    : [0, 0, 0];
 }
 
 function animate() {

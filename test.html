@@ -28,55 +28,76 @@
     </style>
   </head>
   <body>
-    <button onclick="fireConfetti()">Launch Confetti!</button>
-    <button onclick="fireCustomConfetti()">Custom Confetti!</button>
-    <button onclick="fireEmojiConfetti()">Emoji Confetti! 🎉</button>
+    <button id="basic">Launch Confetti!</button>
+    <button id="custom">Custom Confetti!</button>
+    <button id="emoji">Emoji Confetti! 🎉</button>
 
-    <script type="module">
-      import confetti, { shapeFromText } from "./dist/confetti.js";
+    <script src="./dist/bundles/canvas-confetti-ts.umd.js"></script>
+    <script>
+      console.log("UMD module loaded:", canvasConfetti);
 
-      // Make confetti available globally for the onclick handlers
-      window.fireConfetti = () => {
-        confetti({
-          particleCount: 100,
-          spread: 70,
-          origin: { y: 0.6 },
-        });
-      };
+      // Get the default export and named exports
+      const confetti = canvasConfetti.__esModule
+        ? canvasConfetti.default
+        : canvasConfetti;
+      const shapeFromText = canvasConfetti.shapeFromText;
 
-      window.fireCustomConfetti = () => {
-        confetti({
-          particleCount: 50,
-          angle: 60,
-          spread: 55,
-          origin: { x: 0 },
-          colors: ["#ff0000", "#00ff00", "#0000ff"],
-        });
+      document.getElementById("basic").addEventListener("click", () => {
+        console.log("Basic confetti clicked");
+        try {
+          confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { x: 0.5, y: 0.6 },
+          });
+        } catch (err) {
+          console.error("Error launching confetti:", err);
+        }
+      });
 
-        // Fire another burst from the other side
-        confetti({
-          particleCount: 50,
-          angle: 120,
-          spread: 55,
-          origin: { x: 1 },
-          colors: ["#ff0000", "#00ff00", "#0000ff"],
-        });
-      };
+      document.getElementById("custom").addEventListener("click", () => {
+        console.log("Custom confetti clicked");
+        try {
+          confetti({
+            particleCount: 50,
+            angle: 60,
+            spread: 55,
+            origin: { x: 0 },
+            colors: ["#ff0000", "#00ff00", "#0000ff"],
+          });
 
-      window.fireEmojiConfetti = () => {
-        const emoji = shapeFromText({
-          text: "🎉",
-          scalar: 1.5,
-        });
+          // Fire another burst from the other side
+          confetti({
+            particleCount: 50,
+            angle: 120,
+            spread: 55,
+            origin: { x: 1 },
+            colors: ["#ff0000", "#00ff00", "#0000ff"],
+          });
+        } catch (err) {
+          console.error("Error launching confetti:", err);
+        }
+      });
 
-        confetti({
-          shapes: [emoji],
-          particleCount: 30,
-          scalar: 2,
-          spread: 45,
-          origin: { y: 0.6 },
-        });
-      };
+      document.getElementById("emoji").addEventListener("click", () => {
+        console.log("Emoji confetti clicked");
+        try {
+          const emoji = shapeFromText({
+            text: "🎉",
+            scalar: 1.5,
+          });
+
+          confetti({
+            shapes: [emoji],
+            particleCount: 30,
+            scalar: 2,
+            spread: 45,
+            origin: { x: 0.5, y: 0.6 },
+          });
+        } catch (err) {
+          console.error("Error launching confetti:", err);
+        }
+      });
     </script>
   </body>
 </html>

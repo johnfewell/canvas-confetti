@@ -2,16 +2,16 @@
 export interface PathShape {
   type: "path";
   path: string;
-  matrix: DOMMatrix;
+  matrix: number[];
 }
 
 export interface BitmapShape {
   type: "bitmap";
   bitmap: ImageBitmap;
-  matrix: DOMMatrix;
+  matrix: number[];
 }
 
-export type Shape = PathShape | BitmapShape | "square" | "circle" | "star";
+export type Shape = "square" | "circle" | "star" | PathShape | BitmapShape;
 
 export interface Origin {
   x?: number;
@@ -35,6 +35,7 @@ export interface Options {
   zIndex?: number;
   x?: number;
   y?: number;
+  flat?: boolean;
 }
 
 export interface GlobalOptions {
@@ -60,20 +61,43 @@ declare global {
 
 // Implementation
 const canUseWorker = !!(
-  typeof window !== "undefined" &&
-  "Worker" in window &&
-  "Blob" in window &&
-  "Promise" in window &&
-  "OffscreenCanvas" in window &&
-  "OffscreenCanvasRenderingContext2D" in window &&
-  "HTMLCanvasElement" in window &&
-  "transferControlToOffscreen" in HTMLCanvasElement.prototype &&
-  "URL" in window &&
-  "createObjectURL" in URL
+  typeof Worker !== "undefined" &&
+  typeof Blob !== "undefined" &&
+  typeof Promise !== "undefined" &&
+  typeof OffscreenCanvas !== "undefined" &&
+  typeof OffscreenCanvasRenderingContext2D !== "undefined" &&
+  typeof HTMLCanvasElement !== "undefined" &&
+  typeof HTMLCanvasElement.prototype.transferControlToOffscreen !==
+    "undefined" &&
+  typeof URL !== "undefined" &&
+  typeof URL.createObjectURL !== "undefined"
 );
 
 const canUsePaths =
   typeof Path2D === "function" && typeof DOMMatrix === "function";
+
+const canDrawBitmap = (() => {
+  if (typeof OffscreenCanvas === "undefined") return false;
+  const canvas = new OffscreenCanvas(1, 1);
+  const ctx = canvas.getContext(
+    "2d"
+  ) as OffscreenCanvasRenderingContext2D | null;
+  if (!ctx) return false;
+  ctx.fillRect(0, 0, 1, 1);
+  const bitmap = canvas.transferToImageBitmap();
+  try {
+    ctx.createPattern(bitmap, "no-repeat");
+    return true;
+  } catch (e) {
+    return false;
+  }
+})();
+
+interface RGB {
+  r: number;
+  g: number;
+  b: number;
+}
 
 const defaults: Required<Options> = {
   particleCount: 50,
@@ -86,7 +110,7 @@ const defaults: Required<Options> = {
   ticks: 200,
   x: 0.5,
   y: 0.5,
-  shapes: ["square", "circle"],
+  shapes: ["square", "circle"] as ("square" | "circle")[],
   zIndex: 100,
   colors: [
     "#26ccff",
@@ -99,7 +123,8 @@ const defaults: Required<Options> = {
   ],
   disableForReducedMotion: false,
   scalar: 1,
-  origin: { x: 0.5, y: 0.5 },
+  flat: false,
+  origin: { x: undefined, y: undefined },
 };
 
 interface Particle {
@@ -110,7 +135,7 @@ interface Particle {
   velocity: number;
   angle2D: number;
   tiltAngle: number;
-  color: string;
+  color: RGB;
   shape: Shape;
   tick: number;
   totalTicks: number;
@@ -124,7 +149,7 @@ interface Particle {
   gravity: number;
   ovalScalar: number;
   scalar: number;
-  flat?: boolean;
+  flat: boolean;
 }
 
 let canvas: HTMLCanvasElement | null = null;
@@ -168,7 +193,29 @@ function createParticle(options: Required<Options>): Particle {
       options.startVelocity * 0.5 + Math.random() * options.startVelocity,
     angle2D: -radAngle + (0.5 * radSpread - Math.random() * radSpread),
     tiltAngle: (Math.random() * (0.75 - 0.25) + 0.25) * Math.PI,
-    color: options.colors[Math.floor(Math.random() * options.colors.length)],
+    color: {
+      r: parseInt(
+        options.colors[Math.floor(Math.random() * options.colors.length)].slice(
+          1,
+          3
+        ),
+        16
+      ),
+      g: parseInt(
+        options.colors[Math.floor(Math.random() * options.colors.length)].slice(
+          3,
+          5
+        ),
+        16
+      ),
+      b: parseInt(
+        options.colors[Math.floor(Math.random() * options.colors.length)].slice(
+          5,
+          7
+        ),
+        16
+      ),
+    },
     shape: options.shapes[Math.floor(Math.random() * options.shapes.length)],
     tick: 0,
     totalTicks: options.ticks,
@@ -182,6 +229,7 @@ function createParticle(options: Required<Options>): Particle {
     gravity: options.gravity * 3,
     ovalScalar: 0.6,
     scalar: options.scalar,
+    flat: options.flat,
   };
 }
 
@@ -215,19 +263,74 @@ function updateParticle(particle: Particle): boolean {
   );
 }
 
-function drawParticle(particle: Particle) {
-  if (!ctx) return;
-
+function renderParticle(
+  ctx: CanvasRenderingContext2D,
+  particle: Particle
+): void {
   const progress = particle.tick / particle.totalTicks;
+  const opacity = 1 - progress;
+
   const x1 = particle.x + particle.random * particle.tiltCos;
   const y1 = particle.y + particle.random * particle.tiltSin;
   const x2 = particle.wobbleX + particle.random * particle.tiltCos;
   const y2 = particle.wobbleY + particle.random * particle.tiltSin;
 
-  ctx.fillStyle = `rgba(${hexToRgb(particle.color).join(",")},${1 - progress})`;
+  ctx.fillStyle = `rgba(${particle.color.r}, ${particle.color.g}, ${particle.color.b}, ${opacity})`;
   ctx.beginPath();
 
-  if (particle.shape === "circle") {
+  if (typeof particle.shape === "object") {
+    if (canUsePaths && particle.shape.type === "path") {
+      const path2d = new Path2D(particle.shape.path);
+      const t1 = new Path2D();
+      t1.addPath(path2d, new DOMMatrix(particle.shape.matrix));
+
+      const t2 = new Path2D();
+      t2.addPath(
+        t1,
+        new DOMMatrix([
+          Math.cos(particle.wobble) * Math.abs(x2 - x1) * 0.1,
+          Math.sin(particle.wobble) * Math.abs(x2 - x1) * 0.1,
+          -Math.sin(particle.wobble) * Math.abs(y2 - y1) * 0.1,
+          Math.cos(particle.wobble) * Math.abs(y2 - y1) * 0.1,
+          particle.x,
+          particle.y,
+        ])
+      );
+
+      ctx.fill(t2);
+    } else if (particle.shape.type === "bitmap") {
+      const rotation = (Math.PI / 10) * particle.wobble;
+      const scaleX = Math.abs(x2 - x1) * 0.1;
+      const scaleY = Math.abs(y2 - y1) * 0.1;
+      const width = particle.shape.bitmap.width * particle.scalar;
+      const height = particle.shape.bitmap.height * particle.scalar;
+
+      const matrix = new DOMMatrix([
+        Math.cos(rotation) * scaleX,
+        Math.sin(rotation) * scaleX,
+        -Math.sin(rotation) * scaleY,
+        Math.cos(rotation) * scaleY,
+        particle.x,
+        particle.y,
+      ]);
+
+      matrix.multiplySelf(new DOMMatrix(particle.shape.matrix));
+
+      const pattern = ctx.createPattern(particle.shape.bitmap, "no-repeat");
+      if (!pattern) return;
+
+      pattern.setTransform(matrix);
+      ctx.globalAlpha = opacity;
+      ctx.fillStyle = pattern;
+      ctx.fillRect(
+        particle.x - width / 2,
+        particle.y - height / 2,
+        width,
+        height
+      );
+      ctx.globalAlpha = 1;
+    }
+  } else if (particle.shape === "circle") {
     const radiusX = Math.abs(x2 - x1) * particle.ovalScalar;
     const radiusY = Math.abs(y2 - y1) * particle.ovalScalar;
     ctx.ellipse(
@@ -237,10 +340,10 @@ function drawParticle(particle: Particle) {
       radiusY,
       (Math.PI / 10) * particle.wobble,
       0,
-      Math.PI * 2
+      2 * Math.PI
     );
   } else if (particle.shape === "star") {
-    let rotation = (Math.PI / 2) * 3;
+    let rot = (Math.PI / 2) * 3;
     const innerRadius = 4 * particle.scalar;
     const outerRadius = 8 * particle.scalar;
     let x = particle.x;
@@ -249,15 +352,15 @@ function drawParticle(particle: Particle) {
     const step = Math.PI / spikes;
 
     while (spikes--) {
-      x = particle.x + Math.cos(rotation) * outerRadius;
-      y = particle.y + Math.sin(rotation) * outerRadius;
+      x = particle.x + Math.cos(rot) * outerRadius;
+      y = particle.y + Math.sin(rot) * outerRadius;
       ctx.lineTo(x, y);
-      rotation += step;
+      rot += step;
 
-      x = particle.x + Math.cos(rotation) * innerRadius;
-      y = particle.y + Math.sin(rotation) * innerRadius;
+      x = particle.x + Math.cos(rot) * innerRadius;
+      y = particle.y + Math.sin(rot) * innerRadius;
       ctx.lineTo(x, y);
-      rotation += step;
+      rot += step;
     }
   } else {
     // square
@@ -287,8 +390,8 @@ function animate() {
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   particles = particles.filter((particle) => {
-    if (updateParticle(particle)) {
-      drawParticle(particle);
+    if (updateParticle(particle) && ctx) {
+      renderParticle(ctx, particle);
       return true;
     }
     return false;
@@ -363,67 +466,137 @@ function confetti(options?: Options): Promise<undefined> | null {
 // Add reset function to confetti
 confetti.reset = reset;
 
-export function shapeFromPath({
-  path,
-  matrix,
-}: {
-  path: string;
-  matrix?: DOMMatrix;
-}): Shape {
+export function shapeFromPath(
+  pathData: string | { path: string; matrix?: number[] }
+): PathShape {
+  if (!canUsePaths) {
+    throw new Error("path confetti are not supported in this browser");
+  }
+
+  let path: string;
+  let matrix: number[] | undefined;
+
+  if (typeof pathData === "string") {
+    path = pathData;
+  } else {
+    path = pathData.path;
+    matrix = pathData.matrix;
+  }
+
+  const path2d = new Path2D(path);
+  const tempCanvas = document.createElement("canvas");
+  const tempCtx = tempCanvas.getContext("2d");
+  if (!tempCtx) throw new Error("Could not get canvas context");
+
+  if (!matrix) {
+    // Calculate path bounds
+    const maxSize = 1000;
+    let minX = maxSize;
+    let minY = maxSize;
+    let maxX = 0;
+    let maxY = 0;
+
+    for (let x = 0; x < maxSize; x += 2) {
+      for (let y = 0; y < maxSize; y += 2) {
+        if (tempCtx.isPointInPath(path2d, x, y, "nonzero")) {
+          minX = Math.min(minX, x);
+          minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x);
+          maxY = Math.max(maxY, y);
+        }
+      }
+    }
+
+    const width = maxX - minX;
+    const height = maxY - minY;
+    const maxDesiredSize = 10;
+    const scale = Math.min(maxDesiredSize / width, maxDesiredSize / height);
+
+    matrix = [
+      scale,
+      0,
+      0,
+      scale,
+      -Math.round(width / 2 + minX) * scale,
+      -Math.round(height / 2 + minY) * scale,
+    ];
+  }
+
   return {
     type: "path",
     path,
-    matrix: matrix || new DOMMatrix(),
+    matrix,
   };
 }
 
-export function shapeFromText({
-  text,
-  scalar = 1,
-  color = "#000000",
-  fontFamily = "serif",
-}: {
-  text: string;
-  scalar?: number;
-  color?: string;
-  fontFamily?: string;
-}): Shape {
-  const tempCanvas = document.createElement("canvas");
-  const tempCtx = tempCanvas.getContext("2d");
-  if (!tempCtx) return "square";
+export function shapeFromText(
+  textData:
+    | string
+    | { text: string; scalar?: number; fontFamily?: string; color?: string }
+): BitmapShape {
+  let text: string;
+  let scalar = 1;
+  let color = "#000000";
+  let fontFamily =
+    '"Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", "EmojiOne Color", "Android Emoji", "Twemoji Mozilla", "system emoji", sans-serif';
 
-  const fontSize = 32;
-  const padding = 2;
-
-  tempCtx.font = `${fontSize}px ${fontFamily}`;
-  const metrics = tempCtx.measureText(text);
-  const width = metrics.width + padding * 2;
-  const height = fontSize + padding * 2;
-
-  tempCanvas.width = width;
-  tempCanvas.height = height;
-
-  tempCtx.font = `${fontSize}px ${fontFamily}`;
-  tempCtx.fillStyle = color;
-  tempCtx.textAlign = "center";
-  tempCtx.textBaseline = "middle";
-  tempCtx.fillText(text, width / 2, height / 2);
-
-  if ("transferToImageBitmap" in tempCanvas) {
-    const bitmap = (
-      tempCanvas as unknown as { transferToImageBitmap(): ImageBitmap }
-    ).transferToImageBitmap();
-    const matrix = new DOMMatrix();
-    matrix.scaleSelf(scalar);
-
-    return {
-      type: "bitmap",
-      bitmap,
-      matrix,
-    };
+  if (typeof textData === "string") {
+    text = textData;
+  } else {
+    text = textData.text;
+    scalar = textData.scalar ?? scalar;
+    fontFamily = textData.fontFamily ?? fontFamily;
+    color = textData.color ?? color;
   }
 
-  return "square";
+  const fontSize = 10 * scalar;
+  const font = `${fontSize}px ${fontFamily}`;
+
+  const canvas = new OffscreenCanvas(fontSize, fontSize);
+  const ctx = canvas.getContext("2d", {
+    willReadFrequently: true,
+  }) as OffscreenCanvasRenderingContext2D;
+  if (!ctx) throw new Error("Could not get canvas context");
+
+  ctx.font = font;
+  const size = ctx.measureText(text);
+  const width = Math.ceil(
+    size.actualBoundingBoxRight + size.actualBoundingBoxLeft
+  );
+  const height = Math.ceil(
+    size.actualBoundingBoxAscent + size.actualBoundingBoxDescent
+  );
+
+  const padding = 2;
+  const x = size.actualBoundingBoxLeft + padding;
+  const y = size.actualBoundingBoxAscent + padding;
+  const finalWidth = width + padding * 2;
+  const finalHeight = height + padding * 2;
+
+  const finalCanvas = new OffscreenCanvas(finalWidth, finalHeight);
+  const finalCtx = finalCanvas.getContext("2d", {
+    willReadFrequently: true,
+  }) as OffscreenCanvasRenderingContext2D;
+  if (!finalCtx) throw new Error("Could not get canvas context");
+
+  finalCtx.font = font;
+  finalCtx.fillStyle = color;
+  finalCtx.fillText(text, x, y);
+
+  const scale = 1 / scalar;
+
+  return {
+    type: "bitmap",
+    bitmap: finalCanvas.transferToImageBitmap(),
+    matrix: [
+      scale,
+      0,
+      0,
+      scale,
+      (-finalWidth * scale) / 2,
+      (-finalHeight * scale) / 2,
+    ],
+  };
 }
 
 export default confetti;

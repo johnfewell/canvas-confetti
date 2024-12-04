@@ -8,12 +8,10 @@ module.exports = {
   output: {
     path: path.resolve(__dirname, "dist/bundles"),
     filename: "canvas-confetti-ts.umd.js",
-    library: {
-      name: "canvasConfetti",
-      type: "umd",
-      umdNamedDefine: true,
-    },
-    globalObject: "this",
+    library: "canvasConfetti",
+    libraryTarget: "umd",
+    umdNamedDefine: true,
+    globalObject: "window",
   },
   optimization: {
     minimize: true,
